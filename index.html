@@ -175,6 +175,7 @@
     const _cfg       = (() => { try { return JSON.parse(localStorage.getItem('scrim-config') || '{}'); } catch { return {}; } })();
     const CHANNEL    = _cfg.channel   || 'verhulst';
     const YOUR_TEAM  = (_cfg.yourTeam || '100T').toUpperCase();
+    const YOUR_TEAMS = [YOUR_TEAM, 'CRT'];
     const SCROLL_PPS = _cfg.scrollPps || 85;
     const DEMO_MODE  = new URLSearchParams(location.search).has('demo');
     // ────────────────────────────────────────────────────────────────────────────
@@ -233,7 +234,7 @@
       let html = '';
 
       teams.forEach((t, i) => {
-        const you      = t.name.toUpperCase() === YOUR_TEAM.toUpperCase();
+        const you      = YOUR_TEAMS.includes(t.name.toUpperCase());
         const top3     = t.rank <= 3;
         const prevRank = prevRanks.get(t.name.toUpperCase());
         let deltaHTML  = '';
