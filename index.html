@@ -89,6 +89,16 @@
       margin: auto 0;
     }
 
+    .t-delta {
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1;
+      margin: auto 0;
+      letter-spacing: 0;
+    }
+    .t-delta.up   { color: #44dd88; }
+    .t-delta.down { color: #ff5555; }
+
     /* ── Your team highlight ── */
     .t-item.highlight {
       background: rgba(218, 41, 42, 0.30);
@@ -173,6 +183,7 @@
 
     const track = document.getElementById('ticker-track');
     const prevScores = new Map();
+    const prevRanks  = new Map();
     let lastMessage = null;
     let ws;
 
@@ -222,13 +233,20 @@
       let html = '';
 
       teams.forEach((t, i) => {
-        const you  = t.name.toUpperCase() === YOUR_TEAM.toUpperCase();
-        const top3 = t.rank <= 3;
+        const you      = t.name.toUpperCase() === YOUR_TEAM.toUpperCase();
+        const top3     = t.rank <= 3;
+        const prevRank = prevRanks.get(t.name.toUpperCase());
+        let deltaHTML  = '';
+        if (prevRank !== undefined && prevRank !== t.rank) {
+          const diff = prevRank - t.rank; // positive = moved up (rank number got smaller)
+          deltaHTML = `<span class="t-delta ${diff > 0 ? 'up' : 'down'}">${diff > 0 ? '▲' : '▼'}${Math.abs(diff)}</span>`;
+        }
         if (i > 0) html += SEP;
         html += `<span class="t-item${you ? ' highlight' : ''}">` +
           `<span class="t-rank${top3 ? ' gold' : ''}">#${t.rank}</span>` +
           `<span class="t-name">${t.name}</span>` +
           `<span class="t-score" data-team="${t.name.toUpperCase()}">${t.score}</span>` +
+          deltaHTML +
           `</span>`;
       });
 
@@ -255,7 +273,10 @@
         const newVal = parseInt(el.textContent);
         if (oldVal !== undefined && oldVal !== newVal) animateCounter(el, oldVal, newVal);
       });
-      data.teams.forEach(t => prevScores.set(t.name.toUpperCase(), t.score));
+      data.teams.forEach(t => {
+        prevScores.set(t.name.toUpperCase(), t.score);
+        prevRanks.set(t.name.toUpperCase(), t.rank);
+      });
 
       // Measure after layout, then start scroll animation
       track.style.animation = 'none';
