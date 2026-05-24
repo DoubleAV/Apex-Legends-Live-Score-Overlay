@@ -118,26 +118,33 @@
       </div>
     </div>
 
+    <label>Team Aliases <span style="color:#444;font-size:10px;letter-spacing:1px">(comma separated)</span></label>
+    <input id="aliases" type="text" placeholder="CRT, ALT" spellcheck="false">
+
     <button onclick="save()">Save & Apply</button>
     <div id="status"></div>
     <p class="hint">After saving, refresh the overlay browser source in OBS to apply changes.</p>
   </div>
 
   <script>
-    const DEFAULTS = { channel: 'verhulst', yourTeam: '100T', scrollPps: 85 };
+    const DEFAULTS = { channel: 'verhulst', yourTeam: '100T', scrollPps: 85, aliases: ['CRT'] };
 
     function load() {
       const cfg = JSON.parse(localStorage.getItem('scrim-config') || '{}');
       document.getElementById('channel').value   = cfg.channel   || DEFAULTS.channel;
       document.getElementById('yourTeam').value  = cfg.yourTeam  || DEFAULTS.yourTeam;
       document.getElementById('scrollPps').value = cfg.scrollPps || DEFAULTS.scrollPps;
+      document.getElementById('aliases').value   = (cfg.aliases  || DEFAULTS.aliases).join(', ');
     }
 
     function save() {
+      const rawAliases = document.getElementById('aliases').value;
+      const aliases = rawAliases.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
       const cfg = {
         channel:   document.getElementById('channel').value.trim()  || DEFAULTS.channel,
         yourTeam:  (document.getElementById('yourTeam').value.trim() || DEFAULTS.yourTeam).toUpperCase(),
         scrollPps: parseInt(document.getElementById('scrollPps').value) || DEFAULTS.scrollPps,
+        aliases,
       };
       localStorage.setItem('scrim-config', JSON.stringify(cfg));
       const el = document.getElementById('status');
