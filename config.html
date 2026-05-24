@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <title>Overlay Config</title>
+  <!-- Same font as the overlay so the config page matches the overall aesthetic -->
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    /* Dark background matching the overlay style */
     body {
       background: #0a0a0f;
       color: #fff;
@@ -17,6 +19,7 @@
       min-height: 100vh;
     }
 
+    /* Centered card with the same red top border as the ticker bar */
     .panel {
       background: rgba(8, 8, 12, 0.98);
       border-top: 3px solid #da292a;
@@ -34,6 +37,7 @@
     }
     h1 span { color: #da292a; }
 
+    /* Small uppercase label above each input field */
     label {
       display: block;
       font-size: 11px;
@@ -58,8 +62,10 @@
       outline: none;
       transition: border-color 0.15s;
     }
+    /* Red border glow when an input is focused */
     input:focus { border-color: #da292a; }
 
+    /* Side-by-side layout for the Your Team and Scroll Speed fields */
     .row { display: flex; gap: 14px; }
     .row .field { flex: 1; }
 
@@ -80,6 +86,7 @@
     }
     button:hover { background: #bf2122; }
 
+    /* "Saved!" confirmation that briefly appears after clicking Save */
     #status {
       text-align: center;
       font-size: 12px;
@@ -91,6 +98,7 @@
       height: 18px;
     }
 
+    /* Reminder text at the bottom about refreshing OBS */
     .hint {
       font-size: 12px;
       color: #3a3a44;
@@ -104,54 +112,73 @@
   <div class="panel">
     <h1>Overlay <span>Config</span></h1>
 
+    <!-- The Twitch channel whose chat the overlay listens to -->
     <label>Twitch Channel</label>
     <input id="channel" type="text" placeholder="verhulst" spellcheck="false">
 
     <div class="row">
       <div class="field">
+        <!-- The primary team name to highlight in the ticker (e.g. 100T) -->
         <label>Your Team</label>
         <input id="yourTeam" type="text" placeholder="100T" spellcheck="false">
       </div>
       <div class="field">
+        <!-- How fast the ticker scrolls — higher number = faster. Default is 85. -->
         <label>Scroll Speed</label>
         <input id="scrollPps" type="number" placeholder="85" min="20" max="300">
       </div>
     </div>
 
+    <!-- Any other names the team goes by that should also get the highlight treatment.
+         Enter as a comma-separated list, e.g: CRT, ALT -->
     <label>Team Aliases <span style="color:#444;font-size:10px;letter-spacing:1px">(comma separated)</span></label>
     <input id="aliases" type="text" placeholder="CRT, ALT" spellcheck="false">
 
     <button onclick="save()">Save & Apply</button>
     <div id="status"></div>
+    <!-- Settings are saved to the browser's localStorage. After saving, refresh
+         the OBS browser source so the overlay picks up the new values. -->
     <p class="hint">After saving, refresh the overlay browser source in OBS to apply changes.</p>
   </div>
 
   <script>
+    // Fallback values used when a field is left blank
     const DEFAULTS = { channel: 'verhulst', yourTeam: '100T', scrollPps: 85, aliases: ['CRT'] };
 
+    // Reads saved settings from localStorage and pre-fills the form fields.
+    // Called automatically when the page loads so you always see the current config.
     function load() {
       const cfg = JSON.parse(localStorage.getItem('scrim-config') || '{}');
       document.getElementById('channel').value   = cfg.channel   || DEFAULTS.channel;
       document.getElementById('yourTeam').value  = cfg.yourTeam  || DEFAULTS.yourTeam;
       document.getElementById('scrollPps').value = cfg.scrollPps || DEFAULTS.scrollPps;
+      // Join the aliases array back into a comma-separated string for display
       document.getElementById('aliases').value   = (cfg.aliases  || DEFAULTS.aliases).join(', ');
     }
 
+    // Reads the form, validates it, and writes the config to localStorage.
+    // The overlay reads from localStorage each time it loads, so refreshing OBS applies the changes.
     function save() {
+      // Split the aliases field on commas, strip whitespace, and uppercase each entry
       const rawAliases = document.getElementById('aliases').value;
       const aliases = rawAliases.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+
       const cfg = {
         channel:   document.getElementById('channel').value.trim()  || DEFAULTS.channel,
         yourTeam:  (document.getElementById('yourTeam').value.trim() || DEFAULTS.yourTeam).toUpperCase(),
         scrollPps: parseInt(document.getElementById('scrollPps').value) || DEFAULTS.scrollPps,
         aliases,
       };
+
       localStorage.setItem('scrim-config', JSON.stringify(cfg));
+
+      // Show a brief "Saved!" confirmation then clear it after 2 seconds
       const el = document.getElementById('status');
       el.textContent = 'Saved!';
       setTimeout(() => el.textContent = '', 2000);
     }
 
+    // Pre-fill the form on page load
     load();
   </script>
 </body>

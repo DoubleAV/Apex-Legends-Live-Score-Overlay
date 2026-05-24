@@ -3,10 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <title>Scrim Ticker</title>
+  <!-- Rajdhani is a narrow, bold font that looks great for esports overlays -->
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
   <style>
+    /* Remove all default browser spacing so nothing shifts the layout */
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    /* Transparent background lets OBS show the game behind the overlay.
+       overflow:hidden stops any content from spilling outside the bar. */
     body {
       background: transparent;
       overflow: hidden;
@@ -14,7 +18,8 @@
       line-height: 1;
     }
 
-    /* ── Outer ticker bar ── */
+    /* The full-width ticker bar sitting at the bottom of the stream.
+       border-top is the red accent line along the top edge. */
     #ticker {
       display: flex;
       align-items: center;
@@ -27,7 +32,8 @@
       line-height: 1;
     }
 
-    /* ── Scrolling viewport ── */
+    /* The visible window through which the scrolling content moves.
+       overflow:hidden clips anything outside the bar boundaries. */
     #ticker-viewport {
       flex: 1;
       overflow: hidden;
@@ -37,21 +43,25 @@
       margin-left: 8px;
     }
 
-    /* ── The track that moves ── */
+    /* The moving strip that holds all the score items.
+       will-change:transform tells the browser to GPU-accelerate the scroll animation. */
     #ticker-track {
       display: flex;
       align-items: center;
-      white-space: nowrap;
+      white-space: nowrap; /* keeps all items on one line */
       will-change: transform;
       height: 100%;
     }
 
+    /* Scrolls the track exactly halfway (-50%) then loops back to 0.
+       This works seamlessly because the track content is duplicated —
+       by the time it reaches -50%, the second copy looks identical to the start. */
     @keyframes ticker-scroll {
       0%   { transform: translateX(0); }
       100% { transform: translateX(-50%); }
     }
 
-    /* ── Score items ── */
+    /* Each team's block: rank + name + score (+ optional rank arrow) */
     .t-item {
       display: flex;
       align-items: center;
@@ -62,6 +72,7 @@
       line-height: 1;
     }
 
+    /* The #1, #2, #3 ... position number shown before the team name */
     .t-rank {
       font-size: 16px;
       font-weight: 700;
@@ -69,8 +80,10 @@
       line-height: 1;
       margin: auto 0;
     }
+    /* Gold color for the top 3 ranked teams */
     .t-rank.gold { color: #ffd700; }
 
+    /* The team name (e.g. "100T", "TL") */
     .t-name {
       font-size: 24px;
       font-weight: 700;
@@ -81,6 +94,7 @@
       margin: auto 0;
     }
 
+    /* The point total shown after the team name */
     .t-score {
       font-size: 26px;
       font-weight: 700;
@@ -89,6 +103,8 @@
       margin: auto 0;
     }
 
+    /* Small rank-change arrow shown after the score (e.g. ▲2 or ▼1).
+       Only appears after the second score update, when a before/after comparison exists. */
     .t-delta {
       font-size: 13px;
       font-weight: 700;
@@ -96,10 +112,10 @@
       margin: auto 0;
       letter-spacing: 0;
     }
-    .t-delta.up   { color: #44dd88; }
-    .t-delta.down { color: #ff5555; }
+    .t-delta.up   { color: #44dd88; } /* moved up in standings */
+    .t-delta.down { color: #ff5555; } /* moved down in standings */
 
-    /* ── Your team highlight ── */
+    /* Red highlight box drawn around your team's score item so it stands out */
     .t-item.highlight {
       background: rgba(218, 41, 42, 0.30);
       border: 2px solid rgba(255, 100, 100, 0.70);
@@ -111,14 +127,14 @@
     .t-item.highlight .t-score { color: #ffffff; }
     .t-item.highlight .t-rank  { color: #ff8888; }
 
-    /* ── Separator ── */
+    /* Small diamond ◆ used to visually separate teams from each other */
     .t-sep {
       color: #333;
       font-size: 9px;
       flex-shrink: 0;
     }
 
-    /* ── Bans section ── */
+    /* "Bans" label shown before the list of banned legends */
     .t-bans-label {
       font-size: 14px;
       font-weight: 700;
@@ -127,6 +143,7 @@
       color: #ffaa44;
       margin-right: 8px;
     }
+    /* Each individual banned legend name */
     .t-ban {
       font-size: 18px;
       font-weight: 600;
@@ -134,13 +151,14 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
+    /* Dot separator between banned legend names */
     .t-ban-sep {
       color: #442200;
       padding: 0 5px;
       font-size: 9px;
     }
 
-    /* ── Waiting state ── */
+    /* "Waiting for !now..." text shown before any score data arrives */
     #waiting {
       padding-left: 20px;
       font-size: 12px;
@@ -150,6 +168,7 @@
       color: #444;
       font-family: 'Rajdhani', sans-serif;
     }
+    /* Animated blinking dots on the waiting message */
     .dot { animation: blink 1.4s infinite both; }
     .dot:nth-child(2) { animation-delay: 0.2s; }
     .dot:nth-child(3) { animation-delay: 0.4s; }
@@ -160,9 +179,11 @@
   </style>
 </head>
 <body>
+  <!-- The ticker bar. Everything inside scrolls horizontally. -->
   <div id="ticker">
     <div id="ticker-viewport">
       <div id="ticker-track">
+        <!-- Default state before StreamElements sends the first score update -->
         <span id="waiting">
           Waiting for !now<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
         </span>
@@ -171,50 +192,66 @@
   </div>
 
   <script>
-    // ─── CONFIG (edit via config.html, or hardcode defaults here) ───────────────
+    // ─── CONFIG ──────────────────────────────────────────────────────────────────
+    // Settings are saved by config.html into the browser's localStorage.
+    // If nothing has been saved yet, the defaults below are used instead.
     const _cfg       = (() => { try { return JSON.parse(localStorage.getItem('scrim-config') || '{}'); } catch { return {}; } })();
-    const CHANNEL    = _cfg.channel   || 'verhulst';
-    const YOUR_TEAM  = (_cfg.yourTeam || '100T').toUpperCase();
-    const YOUR_TEAMS = [YOUR_TEAM, ...(_cfg.aliases || ['CRT'])];
-    const SCROLL_PPS = _cfg.scrollPps || 85;
-    const DEMO_MODE  = new URLSearchParams(location.search).has('demo');
-    // ────────────────────────────────────────────────────────────────────────────
+    const CHANNEL    = _cfg.channel   || 'verhulst';           // Twitch channel to read chat from
+    const YOUR_TEAM  = (_cfg.yourTeam || '100T').toUpperCase(); // primary team name to highlight
+    const YOUR_TEAMS = [YOUR_TEAM, ...(_cfg.aliases || ['CRT'])]; // all names that should be highlighted (team aliases included)
+    const SCROLL_PPS = _cfg.scrollPps || 85;                   // scroll speed in pixels per second
+    const DEMO_MODE  = new URLSearchParams(location.search).has('demo'); // add ?demo to the URL to preview without live data
+    // ─────────────────────────────────────────────────────────────────────────────
 
+    // Sample score message used in demo mode — matches the exact format StreamElements sends
     const DEMO_MSG = 'AMER PL 2 --- TL: 57, REV: 47, ELTE: 39, FLCN: 39, SR: 38, HUSS: 37, GK: 36, ROC: 35, SEN: 33, NMSS: 32, 100T: 27, JDG: 27, FXI: 23, GODL: 22, VIS: 18, SRC: 16, NIN: 16, DINO: 15, THUG: 14, BB: 13 | Bans: Crypto, Overdrive, Alter, Wattson, Mad Maggie | https://example.com';
 
     const track = document.getElementById('ticker-track');
-    const prevScores = new Map();
-    const prevRanks  = new Map();
-    let lastMessage = null;
-    let ws;
 
+    // These Maps remember the last known score and rank for each team so we can
+    // detect changes between updates and animate accordingly
+    const prevScores = new Map(); // teamName -> last displayed score
+    const prevRanks  = new Map(); // teamName -> last known rank position
+
+    let lastMessage = null; // prevents re-rendering if the same message is sent twice
+    let ws;                 // the WebSocket connection to Twitch IRC
+
+    // Smoothly counts a score element's number from one value to another over 700ms.
+    // Uses an ease-out cubic curve so it starts fast and slows down at the end.
     function animateCounter(el, from, to) {
       const duration = 700;
       const start = performance.now();
       function step(now) {
         const t = Math.min((now - start) / duration, 1);
-        const eased = 1 - Math.pow(1 - t, 3);
+        const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
         el.textContent = Math.round(from + (to - from) * eased);
         if (t < 1) requestAnimationFrame(step);
-        else el.textContent = to;
+        else el.textContent = to; // snap to exact value when done
       }
       requestAnimationFrame(step);
     }
 
-    // ── Parse ──────────────────────────────────────────────────────────────────
+    // ── Parse ─────────────────────────────────────────────────────────────────────
 
+    // Checks whether a chat message looks like a score update.
+    // Valid format: "LOBBY NAME --- TEAM: score, TEAM: score | Bans: ..."
     function isScoreMsg(msg) {
       return msg.includes(' --- ') && /\w+: \d+/.test(msg);
     }
 
+    // Breaks the raw score message string into structured data.
+    // Example input: "AMER PL 2 --- TL: 57, REV: 47 | Bans: Crypto, Alter"
+    // Returns: { lobby: "AMER PL 2", teams: [{rank, name, score}, ...], bans: ["Crypto", "Alter"] }
     function parse(raw) {
       const sep     = raw.indexOf(' --- ');
-      const lobby   = raw.slice(0, sep).trim();
-      const rest    = raw.slice(sep + 5);
-      const parts   = rest.split(' | ');
+      const lobby   = raw.slice(0, sep).trim();           // everything before " --- "
+      const rest    = raw.slice(sep + 5);                 // everything after " --- "
+      const parts   = rest.split(' | ');                  // split into scores section and bans section
       const scores  = parts[0] || '';
       const bansRaw = (parts.find(p => p.startsWith('Bans:')) || '').replace(/^Bans:\s*/, '');
 
+      // Each entry in the scores section looks like "TEAMNAME: 57"
+      // The array index (i) determines rank since they're already sorted by score
       const teams = scores.split(', ').map((e, i) => {
         const c = e.lastIndexOf(': ');
         if (c === -1) return null;
@@ -227,22 +264,28 @@
       return { lobby, teams, bans };
     }
 
-    // ── Render ─────────────────────────────────────────────────────────────────
+    // ── Render ────────────────────────────────────────────────────────────────────
 
+    // Builds the HTML string for one full pass of the ticker content.
+    // This gets duplicated when inserted so the scroll loops seamlessly.
     function buildHTML({ teams, bans }) {
-      const SEP = '<span class="t-sep">◆</span>';
+      const SEP = '<span class="t-sep">◆</span>'; // diamond separator between teams
       let html = '';
 
       teams.forEach((t, i) => {
-        const you      = YOUR_TEAMS.includes(t.name.toUpperCase());
-        const top3     = t.rank <= 3;
-        const prevRank = prevRanks.get(t.name.toUpperCase());
-        let deltaHTML  = '';
+        const you      = YOUR_TEAMS.includes(t.name.toUpperCase()); // should this team be highlighted?
+        const top3     = t.rank <= 3;                               // top 3 get gold rank number
+        const prevRank = prevRanks.get(t.name.toUpperCase());       // rank from the previous update
+
+        // Build the rank change arrow (▲2, ▼1, etc.) if the rank changed since last update.
+        // A lower rank number means a higher position, so "prevRank - t.rank > 0" means moved up.
+        let deltaHTML = '';
         if (prevRank !== undefined && prevRank !== t.rank) {
-          const diff = prevRank - t.rank; // positive = moved up (rank number got smaller)
+          const diff = prevRank - t.rank;
           deltaHTML = `<span class="t-delta ${diff > 0 ? 'up' : 'down'}">${diff > 0 ? '▲' : '▼'}${Math.abs(diff)}</span>`;
         }
-        if (i > 0) html += SEP;
+
+        if (i > 0) html += SEP; // add separator before every team except the first
         html += `<span class="t-item${you ? ' highlight' : ''}">` +
           `<span class="t-rank${top3 ? ' gold' : ''}">#${t.rank}</span>` +
           `<span class="t-name">${t.name}</span>` +
@@ -251,6 +294,7 @@
           `</span>`;
       });
 
+      // Append the banned legends section at the end if any bans exist
       if (bans.length) {
         html += SEP;
         html += `<span class="t-item">` +
@@ -259,62 +303,90 @@
           `</span>`;
       }
 
-      // Spacer so the loop doesn't look abrupt
+      // Gap at the end so there's breathing room before the content loops back around
       html += '<span style="display:inline-block;width:60px"></span>';
       return html;
     }
 
+    // Takes parsed score data, updates the DOM, animates changed scores, and starts scrolling.
     function render(data) {
+      // Insert the content twice so the scroll animation loops without a visible gap
       const single = buildHTML(data);
-      track.innerHTML = single + single;   // duplicate for seamless loop
+      track.innerHTML = single + single;
 
-      // Animate scores that changed since last render
+      // For any score that changed since the last update, animate it counting up/down
       track.querySelectorAll('.t-score[data-team]').forEach(el => {
         const oldVal = prevScores.get(el.dataset.team);
         const newVal = parseInt(el.textContent);
         if (oldVal !== undefined && oldVal !== newVal) animateCounter(el, oldVal, newVal);
       });
+
+      // Save current scores and ranks so the next update can compare against them
       data.teams.forEach(t => {
         prevScores.set(t.name.toUpperCase(), t.score);
         prevRanks.set(t.name.toUpperCase(), t.rank);
       });
 
-      // Measure after layout, then start scroll animation
+      // Calculate scroll duration based on content width and desired speed,
+      // then kick off the animation. The double rAF waits for the browser to
+      // finish layout so scrollWidth is accurate before we read it.
       track.style.animation = 'none';
       requestAnimationFrame(() => requestAnimationFrame(() => {
-        const singleWidth = track.scrollWidth / 2;
+        const singleWidth = track.scrollWidth / 2; // divide by 2 because content is duplicated
         const duration    = singleWidth / SCROLL_PPS;
         track.style.animation = `ticker-scroll ${duration}s linear infinite`;
       }));
     }
 
-    // ── Twitch IRC WebSocket ───────────────────────────────────────────────────
+    // ── Twitch IRC WebSocket ──────────────────────────────────────────────────────
 
+    // Connects to Twitch chat as an anonymous read-only viewer and listens for
+    // score messages posted by the StreamElements bot.
     function connect() {
       ws = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
+
       ws.onopen = () => {
+        // Request extra Twitch-specific IRC tags and commands
         ws.send('CAP REQ :twitch.tv/tags twitch.tv/commands');
+        // "SCHMOOPIIE" is Twitch's required placeholder password for anonymous (justinfan) logins
         ws.send('PASS SCHMOOPIIE');
+        // justinfan + random number is Twitch's convention for anonymous read-only accounts
         ws.send('NICK justinfan' + Math.floor(Math.random() * 90000 + 10000));
         ws.send('JOIN #' + CHANNEL.toLowerCase());
       };
+
       ws.onmessage = (e) => {
         const raw = e.data.trim();
+
+        // Twitch sends PING every ~5 minutes to check the connection is alive; we must PONG back
         if (raw.startsWith('PING')) { ws.send('PONG :tmi.twitch.tv'); return; }
+
+        // Parse the IRC message to extract the sender's username and message text
         const m = raw.match(/:(\w+)!\w+@\w+\.tmi\.twitch\.tv PRIVMSG #\w+ :(.+)/);
         if (!m) return;
+
+        // Only process messages from StreamElements — it's the bot that posts the score updates
         if (m[1].toLowerCase() !== 'streamelements') return;
+
+        // Only process messages that look like score updates (contain " --- " and "TEAM: number")
         if (!isScoreMsg(m[2])) return;
+
+        // Skip if this is the exact same message we already rendered (avoids duplicate renders)
         if (m[2] === lastMessage) return;
+
         lastMessage = m[2];
         render(parse(m[2]));
       };
+
+      // If the connection drops, wait 3 seconds then reconnect automatically
       ws.onclose = () => setTimeout(connect, 3000);
       ws.onerror = () => ws.close();
     }
 
-    // ── Init ───────────────────────────────────────────────────────────────────
+    // ── Init ──────────────────────────────────────────────────────────────────────
 
+    // In demo mode (URL has ?demo), render the sample data immediately without connecting to Twitch.
+    // Otherwise open the live Twitch IRC connection and wait for real score updates.
     if (DEMO_MODE) {
       render(parse(DEMO_MSG));
     } else {
