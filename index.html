@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Scrim Ticker</title>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: transparent;
+      overflow: hidden;
+      width: 100%;
+      line-height: 1;
+    }
+
+    /* ── Outer ticker bar ── */
+    #ticker {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      height: 80px;
+      background: rgba(8, 8, 12, 0.95);
+      border-top: 3px solid #da292a;
+      font-family: 'Rajdhani', 'Arial Narrow', Arial, sans-serif;
+      overflow: hidden;
+      line-height: 1;
+    }
+
+    /* ── Scrolling viewport ── */
+    #ticker-viewport {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      margin-left: 8px;
+    }
+
+    /* ── The track that moves ── */
+    #ticker-track {
+      display: flex;
+      align-items: center;
+      white-space: nowrap;
+      will-change: transform;
+      height: 100%;
+    }
+
+    @keyframes ticker-scroll {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    /* ── Score items ── */
+    .t-item {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 0 12px;
+      height: 100%;
+      line-height: 1;
+    }
+
+    .t-rank {
+      font-size: 16px;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1;
+      margin: auto 0;
+    }
+    .t-rank.gold { color: #ffd700; }
+
+    .t-name {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #ffffff;
+      line-height: 1;
+      margin: auto 0;
+    }
+
+    .t-score {
+      font-size: 26px;
+      font-weight: 700;
+      color: #e8e8e8;
+      line-height: 1;
+      margin: auto 0;
+    }
+
+    /* ── Your team highlight ── */
+    .t-item.highlight {
+      background: rgba(218, 41, 42, 0.30);
+      border: 2px solid rgba(255, 100, 100, 0.70);
+      border-radius: 3px;
+      margin: 0 4px;
+      padding: 0 10px;
+    }
+    .t-item.highlight .t-name  { color: #ff6666; }
+    .t-item.highlight .t-score { color: #ffffff; }
+    .t-item.highlight .t-rank  { color: #ff8888; }
+
+    /* ── Separator ── */
+    .t-sep {
+      color: #333;
+      font-size: 9px;
+      flex-shrink: 0;
+    }
+
+    /* ── Bans section ── */
+    .t-bans-label {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #ffaa44;
+      margin-right: 8px;
+    }
+    .t-ban {
+      font-size: 18px;
+      font-weight: 600;
+      color: #ffcc99;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .t-ban-sep {
+      color: #442200;
+      padding: 0 5px;
+      font-size: 9px;
+    }
+
+    /* ── Waiting state ── */
+    #waiting {
+      padding-left: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #444;
+      font-family: 'Rajdhani', sans-serif;
+    }
+    .dot { animation: blink 1.4s infinite both; }
+    .dot:nth-child(2) { animation-delay: 0.2s; }
+    .dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink {
+      0%, 80%, 100% { opacity: 0; }
+      40%            { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div id="ticker">
+    <div id="ticker-viewport">
+      <div id="ticker-track">
+        <span id="waiting">
+          Waiting for !now<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ─── CONFIG ─────────────────────────────────────────────────────────────────
+    const CHANNEL    = 'verhulst';
+    const YOUR_TEAM  = '100T';
+    const SCROLL_PPS = 85;    // scroll speed in pixels/second — raise to go faster
+    const DEMO_MODE  = new URLSearchParams(location.search).has('demo');
+    // ────────────────────────────────────────────────────────────────────────────
+
+    const DEMO_MSG = 'AMER PL 2 --- TL: 57, REV: 47, ELTE: 39, FLCN: 39, SR: 38, HUSS: 37, GK: 36, ROC: 35, SEN: 33, NMSS: 32, 100T: 27, JDG: 27, FXI: 23, GODL: 22, VIS: 18, SRC: 16, NIN: 16, DINO: 15, THUG: 14, BB: 13 | Bans: Crypto, Overdrive, Alter, Wattson, Mad Maggie | https://example.com';
+
+    const track = document.getElementById('ticker-track');
+    let lastMessage = null;
+    let ws;
+
+    // ── Parse ──────────────────────────────────────────────────────────────────
+
+    function isScoreMsg(msg) {
+      return msg.includes(' --- ') && /\w+: \d+/.test(msg);
+    }
+
+    function parse(raw) {
+      const sep     = raw.indexOf(' --- ');
+      const lobby   = raw.slice(0, sep).trim();
+      const rest    = raw.slice(sep + 5);
+      const parts   = rest.split(' | ');
+      const scores  = parts[0] || '';
+      const bansRaw = (parts.find(p => p.startsWith('Bans:')) || '').replace(/^Bans:\s*/, '');
+
+      const teams = scores.split(', ').map((e, i) => {
+        const c = e.lastIndexOf(': ');
+        if (c === -1) return null;
+        const name  = e.slice(0, c).trim();
+        const score = parseInt(e.slice(c + 2), 10);
+        return isNaN(score) ? null : { rank: i + 1, name, score };
+      }).filter(Boolean);
+
+      const bans = bansRaw ? bansRaw.split(', ').map(b => b.trim()).filter(Boolean) : [];
+      return { lobby, teams, bans };
+    }
+
+    // ── Render ─────────────────────────────────────────────────────────────────
+
+    function buildHTML({ teams, bans }) {
+      const SEP = '<span class="t-sep">◆</span>';
+      let html = '';
+
+      teams.forEach((t, i) => {
+        const you  = t.name.toUpperCase() === YOUR_TEAM.toUpperCase();
+        const top3 = t.rank <= 3;
+        if (i > 0) html += SEP;
+        html += `<span class="t-item${you ? ' highlight' : ''}">` +
+          `<span class="t-rank${top3 ? ' gold' : ''}">#${t.rank}</span>` +
+          `<span class="t-name">${t.name}</span>` +
+          `<span class="t-score">${t.score}</span>` +
+          `</span>`;
+      });
+
+      if (bans.length) {
+        html += SEP;
+        html += `<span class="t-item">` +
+          `<span class="t-bans-label">Bans</span>` +
+          bans.map(b => `<span class="t-ban">${b}</span>`).join('<span class="t-ban-sep">·</span>') +
+          `</span>`;
+      }
+
+      // Spacer so the loop doesn't look abrupt
+      html += '<span style="display:inline-block;width:60px"></span>';
+      return html;
+    }
+
+    function render(data) {
+      const single = buildHTML(data);
+      track.innerHTML = single + single;   // duplicate for seamless loop
+
+      // Measure after layout, then start animation
+      track.style.animation = 'none';
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const singleWidth = track.scrollWidth / 2;
+        const duration    = singleWidth / SCROLL_PPS;
+        track.style.animation = `ticker-scroll ${duration}s linear infinite`;
+      }));
+    }
+
+    // ── Twitch IRC WebSocket ───────────────────────────────────────────────────
+
+    function connect() {
+      ws = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
+      ws.onopen = () => {
+        ws.send('CAP REQ :twitch.tv/tags twitch.tv/commands');
+        ws.send('PASS SCHMOOPIIE');
+        ws.send('NICK justinfan' + Math.floor(Math.random() * 90000 + 10000));
+        ws.send('JOIN #' + CHANNEL.toLowerCase());
+      };
+      ws.onmessage = (e) => {
+        const raw = e.data.trim();
+        if (raw.startsWith('PING')) { ws.send('PONG :tmi.twitch.tv'); return; }
+        const m = raw.match(/:(\w+)!\w+@\w+\.tmi\.twitch\.tv PRIVMSG #\w+ :(.+)/);
+        if (!m) return;
+        if (m[1].toLowerCase() !== 'streamelements') return;
+        if (!isScoreMsg(m[2])) return;
+        if (m[2] === lastMessage) return;
+        lastMessage = m[2];
+        render(parse(m[2]));
+      };
+      ws.onclose = () => setTimeout(connect, 3000);
+      ws.onerror = () => ws.close();
+    }
+
+    // ── Init ───────────────────────────────────────────────────────────────────
+
+    if (DEMO_MODE) {
+      render(parse(DEMO_MSG));
+    } else {
+      connect();
+    }
+  </script>
+</body>
+</html>
