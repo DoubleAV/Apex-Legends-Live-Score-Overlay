@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Overlay Config</title>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a0f;
+      color: #fff;
+      font-family: 'Rajdhani', Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .panel {
+      background: rgba(8, 8, 12, 0.98);
+      border-top: 3px solid #da292a;
+      padding: 36px 44px 32px;
+      width: 440px;
+      border-radius: 4px;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 30px;
+    }
+    h1 span { color: #da292a; }
+
+    label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #666;
+      margin-bottom: 6px;
+    }
+
+    input {
+      width: 100%;
+      background: #111118;
+      border: 1px solid #222;
+      border-radius: 3px;
+      color: #fff;
+      font-family: 'Rajdhani', Arial, sans-serif;
+      font-size: 20px;
+      font-weight: 600;
+      padding: 10px 12px;
+      margin-bottom: 22px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus { border-color: #da292a; }
+
+    .row { display: flex; gap: 14px; }
+    .row .field { flex: 1; }
+
+    button {
+      width: 100%;
+      background: #da292a;
+      border: none;
+      border-radius: 3px;
+      color: #fff;
+      font-family: 'Rajdhani', Arial, sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 13px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover { background: #bf2122; }
+
+    #status {
+      text-align: center;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #4caf50;
+      margin-top: 14px;
+      height: 18px;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: #3a3a44;
+      margin-top: 22px;
+      line-height: 1.7;
+      letter-spacing: 0.3px;
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h1>Overlay <span>Config</span></h1>
+
+    <label>Twitch Channel</label>
+    <input id="channel" type="text" placeholder="verhulst" spellcheck="false">
+
+    <div class="row">
+      <div class="field">
+        <label>Your Team</label>
+        <input id="yourTeam" type="text" placeholder="100T" spellcheck="false">
+      </div>
+      <div class="field">
+        <label>Scroll Speed</label>
+        <input id="scrollPps" type="number" placeholder="85" min="20" max="300">
+      </div>
+    </div>
+
+    <button onclick="save()">Save & Apply</button>
+    <div id="status"></div>
+    <p class="hint">After saving, refresh the overlay browser source in OBS to apply changes.</p>
+  </div>
+
+  <script>
+    const DEFAULTS = { channel: 'verhulst', yourTeam: '100T', scrollPps: 85 };
+
+    function load() {
+      const cfg = JSON.parse(localStorage.getItem('scrim-config') || '{}');
+      document.getElementById('channel').value   = cfg.channel   || DEFAULTS.channel;
+      document.getElementById('yourTeam').value  = cfg.yourTeam  || DEFAULTS.yourTeam;
+      document.getElementById('scrollPps').value = cfg.scrollPps || DEFAULTS.scrollPps;
+    }
+
+    function save() {
+      const cfg = {
+        channel:   document.getElementById('channel').value.trim()  || DEFAULTS.channel,
+        yourTeam:  (document.getElementById('yourTeam').value.trim() || DEFAULTS.yourTeam).toUpperCase(),
+        scrollPps: parseInt(document.getElementById('scrollPps').value) || DEFAULTS.scrollPps,
+      };
+      localStorage.setItem('scrim-config', JSON.stringify(cfg));
+      const el = document.getElementById('status');
+      el.textContent = 'Saved!';
+      setTimeout(() => el.textContent = '', 2000);
+    }
+
+    load();
+  </script>
+</body>
+</html>

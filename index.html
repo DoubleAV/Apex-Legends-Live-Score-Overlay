@@ -161,18 +161,33 @@
   </div>
 
   <script>
-    // ─── CONFIG ─────────────────────────────────────────────────────────────────
-    const CHANNEL    = 'verhulst';
-    const YOUR_TEAM  = '100T';
-    const SCROLL_PPS = 85;    // scroll speed in pixels/second — raise to go faster
+    // ─── CONFIG (edit via config.html, or hardcode defaults here) ───────────────
+    const _cfg       = (() => { try { return JSON.parse(localStorage.getItem('scrim-config') || '{}'); } catch { return {}; } })();
+    const CHANNEL    = _cfg.channel   || 'verhulst';
+    const YOUR_TEAM  = (_cfg.yourTeam || '100T').toUpperCase();
+    const SCROLL_PPS = _cfg.scrollPps || 85;
     const DEMO_MODE  = new URLSearchParams(location.search).has('demo');
     // ────────────────────────────────────────────────────────────────────────────
 
     const DEMO_MSG = 'AMER PL 2 --- TL: 57, REV: 47, ELTE: 39, FLCN: 39, SR: 38, HUSS: 37, GK: 36, ROC: 35, SEN: 33, NMSS: 32, 100T: 27, JDG: 27, FXI: 23, GODL: 22, VIS: 18, SRC: 16, NIN: 16, DINO: 15, THUG: 14, BB: 13 | Bans: Crypto, Overdrive, Alter, Wattson, Mad Maggie | https://example.com';
 
     const track = document.getElementById('ticker-track');
+    const prevScores = new Map();
     let lastMessage = null;
     let ws;
+
+    function animateCounter(el, from, to) {
+      const duration = 700;
+      const start = performance.now();
+      function step(now) {
+        const t = Math.min((now - start) / duration, 1);
+        const eased = 1 - Math.pow(1 - t, 3);
+        el.textContent = Math.round(from + (to - from) * eased);
+        if (t < 1) requestAnimationFrame(step);
+        else el.textContent = to;
+      }
+      requestAnimationFrame(step);
+    }
 
     // ── Parse ──────────────────────────────────────────────────────────────────
 
@@ -213,7 +228,7 @@
         html += `<span class="t-item${you ? ' highlight' : ''}">` +
           `<span class="t-rank${top3 ? ' gold' : ''}">#${t.rank}</span>` +
           `<span class="t-name">${t.name}</span>` +
-          `<span class="t-score">${t.score}</span>` +
+          `<span class="t-score" data-team="${t.name.toUpperCase()}">${t.score}</span>` +
           `</span>`;
       });
 
@@ -234,7 +249,15 @@
       const single = buildHTML(data);
       track.innerHTML = single + single;   // duplicate for seamless loop
 
-      // Measure after layout, then start animation
+      // Animate scores that changed since last render
+      track.querySelectorAll('.t-score[data-team]').forEach(el => {
+        const oldVal = prevScores.get(el.dataset.team);
+        const newVal = parseInt(el.textContent);
+        if (oldVal !== undefined && oldVal !== newVal) animateCounter(el, oldVal, newVal);
+      });
+      data.teams.forEach(t => prevScores.set(t.name.toUpperCase(), t.score));
+
+      // Measure after layout, then start scroll animation
       track.style.animation = 'none';
       requestAnimationFrame(() => requestAnimationFrame(() => {
         const singleWidth = track.scrollWidth / 2;
