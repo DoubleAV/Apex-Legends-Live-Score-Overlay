@@ -19,7 +19,8 @@
     }
 
     /* The full-width ticker bar sitting at the bottom of the stream.
-       border-top is the red accent line along the top edge. */
+       border-top is the red accent line along the top edge.
+       position:relative is required so #standings-flash can overlay it. */
     #ticker {
       display: flex;
       align-items: center;
@@ -30,6 +31,36 @@
       font-family: 'Rajdhani', 'Arial Narrow', Arial, sans-serif;
       overflow: hidden;
       line-height: 1;
+      position: relative;
+    }
+
+    /* Full-standings-update flash overlay. Sits on top of the scrolling ticker
+       and briefly shows "STANDINGS UPDATED" after a full game is scored.
+       pointer-events:none means it never blocks mouse clicks. */
+    #standings-flash {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(8, 8, 12, 0.92);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #fff;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+    #standings-flash .flash-accent { color: #da292a; }
+
+    /* Fades in quickly, holds, then fades out. Total duration is set in JS. */
+    @keyframes standings-flash-anim {
+      0%   { opacity: 0; }
+      12%  { opacity: 1; }
+      80%  { opacity: 1; }
+      100% { opacity: 0; }
     }
 
     /* The visible window through which the scrolling content moves.
@@ -181,6 +212,8 @@
 <body>
   <!-- The ticker bar. Everything inside scrolls horizontally. -->
   <div id="ticker">
+    <!-- Overlay that briefly appears when all standings update after a game -->
+    <div id="standings-flash"></div>
     <div id="ticker-viewport">
       <div id="ticker-track">
         <!-- Default state before StreamElements sends the first score update -->
@@ -215,6 +248,16 @@
 
     let lastMessage = null; // prevents re-rendering if the same message is sent twice
     let ws;                 // the WebSocket connection to Twitch IRC
+
+    // Shows a "STANDINGS UPDATED" overlay across the ticker for 3 seconds then fades out.
+    // Triggered when a full game's worth of scores come in at once.
+    function triggerStandingsFlash() {
+      const el = document.getElementById('standings-flash');
+      el.innerHTML = '<span class="flash-accent">◆</span>&nbsp;&nbsp;STANDINGS UPDATED&nbsp;&nbsp;<span class="flash-accent">◆</span>';
+      el.style.animation = 'none';
+      void el.offsetWidth; // force a reflow so the animation restarts cleanly
+      el.style.animation = 'standings-flash-anim 3s ease forwards';
+    }
 
     // Smoothly counts a score element's number from one value to another over 700ms.
     // Uses an ease-out cubic curve so it starts fast and slows down at the end.
@@ -310,6 +353,16 @@
 
     // Takes parsed score data, updates the DOM, animates changed scores, and starts scrolling.
     function render(data) {
+      // Detect a full standings update: prevScores must have data (not the first render)
+      // and at least half the teams must have a changed score.
+      // We check this before updating prevScores so we're comparing old vs new.
+      const isFirstRender = prevScores.size === 0;
+      const changedCount  = data.teams.filter(t => {
+        const prev = prevScores.get(t.name.toUpperCase());
+        return prev !== undefined && prev !== t.score;
+      }).length;
+      const isFullUpdate = !isFirstRender && changedCount >= Math.ceil(data.teams.length * 0.5);
+
       // Insert the content twice so the scroll animation loops without a visible gap
       const single = buildHTML(data);
       track.innerHTML = single + single;
@@ -336,6 +389,10 @@
         const duration    = singleWidth / SCROLL_PPS;
         track.style.animation = `ticker-scroll ${duration}s linear infinite`;
       }));
+
+      // If this looked like a full game update, flash the standings-updated overlay.
+      // The counter animations run behind it; by the time it fades out (3s) the numbers have settled.
+      if (isFullUpdate) triggerStandingsFlash();
     }
 
     // ── Twitch IRC WebSocket ──────────────────────────────────────────────────────
