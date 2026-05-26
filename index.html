@@ -55,12 +55,28 @@
     }
     #standings-flash .flash-accent { color: #da292a; }
 
-    /* Fades in quickly, holds, then fades out. Total duration is set in JS. */
+    /* Slides down from above the ticker with a red flash, settles to dark, then fades out.
+       The ticker's overflow:hidden clips the element when it's above the bar,
+       so it appears to slide in from nowhere. */
     @keyframes standings-flash-anim {
-      0%   { opacity: 0; }
-      12%  { opacity: 1; }
-      80%  { opacity: 1; }
-      100% { opacity: 0; }
+      0%   { opacity: 1; transform: translateY(-100%); background: rgba(218, 41, 42, 0.98); }
+      14%  { opacity: 1; transform: translateY(0);     background: rgba(218, 41, 42, 0.98); }
+      30%  { opacity: 1; background: rgba(8, 8, 12, 0.92); }
+      78%  { opacity: 1; }
+      100% { opacity: 0; transform: translateY(0); }
+    }
+
+    /* Scale punch on the text as the overlay lands — starts large and snaps to normal size */
+    @keyframes flash-text-punch {
+      0%   { transform: scale(1.2); }
+      20%  { transform: scale(1.0); }
+      100% { transform: scale(1.0); }
+    }
+
+    /* Wrapper for the text inside the flash overlay */
+    .flash-text {
+      display: inline-block;
+      text-shadow: 0 0 28px rgba(218, 41, 42, 0.95), 0 0 10px rgba(255, 255, 255, 0.25);
     }
 
     /* The visible window through which the scrolling content moves.
@@ -253,10 +269,14 @@
     // Triggered when a full game's worth of scores come in at once.
     function triggerStandingsFlash() {
       const el = document.getElementById('standings-flash');
-      el.innerHTML = '<span class="flash-accent">◆</span>&nbsp;&nbsp;STANDINGS UPDATED&nbsp;&nbsp;<span class="flash-accent">◆</span>';
+      el.innerHTML = '<span class="flash-text"><span class="flash-accent">◆</span>&nbsp;&nbsp;STANDINGS UPDATED&nbsp;&nbsp;<span class="flash-accent">◆</span></span>';
+      // Force a reflow so both animations restart cleanly even if triggered back-to-back
       el.style.animation = 'none';
-      void el.offsetWidth; // force a reflow so the animation restarts cleanly
-      el.style.animation = 'standings-flash-anim 3s ease forwards';
+      void el.offsetWidth;
+      el.style.animation = 'standings-flash-anim 5s ease forwards';
+      // Kick off the text scale punch separately so it can be timed independently
+      const textEl = el.querySelector('.flash-text');
+      textEl.style.animation = 'flash-text-punch 5s ease forwards';
     }
 
     // Smoothly counts a score element's number from one value to another over 700ms.
