@@ -273,10 +273,10 @@
       // Force a reflow so both animations restart cleanly even if triggered back-to-back
       el.style.animation = 'none';
       void el.offsetWidth;
-      el.style.animation = 'standings-flash-anim 5s ease forwards';
+      el.style.animation = 'standings-flash-anim 8s ease forwards';
       // Kick off the text scale punch separately so it can be timed independently
       const textEl = el.querySelector('.flash-text');
-      textEl.style.animation = 'flash-text-punch 5s ease forwards';
+      textEl.style.animation = 'flash-text-punch 8s ease forwards';
     }
 
     // Smoothly counts a score element's number from one value to another over 700ms.
