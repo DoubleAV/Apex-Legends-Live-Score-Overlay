@@ -279,7 +279,7 @@
     const YOUR_TEAM       = (_cfg.yourTeam || '100T').toUpperCase(); // primary team name to highlight
     const YOUR_TEAMS      = [YOUR_TEAM, ...(_cfg.aliases || ['CRT'])]; // all names that should be highlighted (team aliases included)
     const SCROLL_PPS      = _cfg.scrollPps || 85;                   // scroll speed in pixels per second
-    const MATCH_POINT_ON  = _cfg.matchPoint === true;                // whether this tournament uses match point rules
+    const MATCH_POINT_ON  = new URLSearchParams(location.search).has('mp') || _cfg.matchPoint === true; // ?mp in the URL or config panel toggle
     const MATCH_POINT     = 50;                                      // score threshold for match point
     const DEMO_MODE  = new URLSearchParams(location.search).has('demo'); // add ?demo to the URL to preview without live data
     // ─────────────────────────────────────────────────────────────────────────────
