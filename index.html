@@ -174,6 +174,36 @@
     .t-item.highlight .t-score { color: #ffffff; }
     .t-item.highlight .t-rank  { color: #ff8888; }
 
+    /* Gold border box for teams on Match Point (score >= 50).
+       Replaces the red border on your own team if they're also on match point. */
+    .t-item.matchpoint:not(.highlight) {
+      border: 2px solid rgba(255, 185, 0, 0.65);
+      border-radius: 3px;
+      margin: 0 4px;
+      padding: 0 10px;
+    }
+    .t-item.highlight.matchpoint {
+      border-color: rgba(255, 185, 0, 0.80);
+    }
+
+    /* Pulsing gold glow on match point team items to draw the eye */
+    @keyframes mp-pulse {
+      0%, 100% { box-shadow: 0 0 5px rgba(255, 185, 0, 0.20); }
+      50%       { box-shadow: 0 0 14px rgba(255, 185, 0, 0.65); }
+    }
+    .t-item.matchpoint { animation: mp-pulse 2s ease-in-out infinite; }
+
+    /* "MP" badge shown before the rank number on match point teams */
+    .t-mp {
+      font-size: 12px;
+      font-weight: 700;
+      color: #ffb900;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      line-height: 1;
+      margin: auto 0;
+    }
+
     /* Small diamond ◆ used to visually separate teams from each other */
     .t-sep {
       color: #333;
@@ -245,10 +275,11 @@
     // Settings are saved by config.html into the browser's localStorage.
     // If nothing has been saved yet, the defaults below are used instead.
     const _cfg       = (() => { try { return JSON.parse(localStorage.getItem('scrim-config') || '{}'); } catch { return {}; } })();
-    const CHANNEL    = _cfg.channel   || 'verhulst';           // Twitch channel to read chat from
-    const YOUR_TEAM  = (_cfg.yourTeam || '100T').toUpperCase(); // primary team name to highlight
-    const YOUR_TEAMS = [YOUR_TEAM, ...(_cfg.aliases || ['CRT'])]; // all names that should be highlighted (team aliases included)
-    const SCROLL_PPS = _cfg.scrollPps || 85;                   // scroll speed in pixels per second
+    const CHANNEL         = _cfg.channel   || 'verhulst';           // Twitch channel to read chat from
+    const YOUR_TEAM       = (_cfg.yourTeam || '100T').toUpperCase(); // primary team name to highlight
+    const YOUR_TEAMS      = [YOUR_TEAM, ...(_cfg.aliases || ['CRT'])]; // all names that should be highlighted (team aliases included)
+    const SCROLL_PPS      = _cfg.scrollPps || 85;                   // scroll speed in pixels per second
+    const MATCH_POINT     = 50;                                      // score at which a team is on match point
     const DEMO_MODE  = new URLSearchParams(location.search).has('demo'); // add ?demo to the URL to preview without live data
     // ─────────────────────────────────────────────────────────────────────────────
 
@@ -338,6 +369,7 @@
       teams.forEach((t, i) => {
         const you      = YOUR_TEAMS.includes(t.name.toUpperCase()); // should this team be highlighted?
         const top3     = t.rank <= 3;                               // top 3 get gold rank number
+        const mp       = t.score >= MATCH_POINT;                    // team is on match point
         const prevRank = prevRanks.get(t.name.toUpperCase());       // rank from the previous update
 
         // Build the rank change arrow (▲2, ▼1, etc.) if the rank changed since last update.
@@ -349,7 +381,8 @@
         }
 
         if (i > 0) html += SEP; // add separator before every team except the first
-        html += `<span class="t-item${you ? ' highlight' : ''}">` +
+        html += `<span class="t-item${you ? ' highlight' : ''}${mp ? ' matchpoint' : ''}">` +
+          (mp ? '<span class="t-mp">MP</span>' : '') +
           `<span class="t-rank${top3 ? ' gold' : ''}">#${t.rank}</span>` +
           `<span class="t-name">${t.name}</span>` +
           `<span class="t-score" data-team="${t.name.toUpperCase()}">${t.score}</span>` +
