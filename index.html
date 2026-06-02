@@ -279,7 +279,7 @@
     const YOUR_TEAM       = (_cfg.yourTeam || '100T').toUpperCase(); // primary team name to highlight
     const YOUR_TEAMS      = [YOUR_TEAM, ...(_cfg.aliases || ['CRT'])]; // all names that should be highlighted (team aliases included)
     const SCROLL_PPS      = _cfg.scrollPps || 85;                   // scroll speed in pixels per second
-    const MATCH_POINT_ON  = new URLSearchParams(location.search).has('mp') || _cfg.matchPoint === true; // ?mp in the URL or config panel toggle
+    let matchPointOn      = new URLSearchParams(location.search).has('mp') || _cfg.matchPoint === true; // ?mp in the URL, config panel toggle, or !mp on/off in chat
     const MATCH_POINT     = 50;                                      // score threshold for match point
     const DEMO_MODE  = new URLSearchParams(location.search).has('demo'); // add ?demo to the URL to preview without live data
     // ─────────────────────────────────────────────────────────────────────────────
@@ -295,6 +295,7 @@
     const prevRanks  = new Map(); // teamName -> last known rank position
 
     let lastMessage = null; // prevents re-rendering if the same message is sent twice
+    let lastData    = null; // last parsed standings — used to re-render when !mp on/off fires
     let ws;                 // the WebSocket connection to Twitch IRC
 
     // Shows a "STANDINGS UPDATED" overlay across the ticker for 3 seconds then fades out.
@@ -370,7 +371,7 @@
       teams.forEach((t, i) => {
         const you      = YOUR_TEAMS.includes(t.name.toUpperCase()); // should this team be highlighted?
         const top3     = t.rank <= 3;                               // top 3 get gold rank number
-        const mp       = MATCH_POINT_ON && t.score >= MATCH_POINT;  // team is on match point (only when mode is enabled)
+        const mp       = matchPointOn && t.score >= MATCH_POINT;    // team is on match point (only when mode is enabled)
         const prevRank = prevRanks.get(t.name.toUpperCase());       // rank from the previous update
 
         // Build the rank change arrow (▲2, ▼1, etc.) if the rank changed since last update.
@@ -451,6 +452,17 @@
 
     // ── Twitch IRC WebSocket ──────────────────────────────────────────────────────
 
+    // Extracts Twitch IRC tags (the @key=value; block at the start of tagged messages)
+    // into a plain object so we can check things like mod status.
+    function parseTags(raw) {
+      if (!raw.startsWith('@')) return {};
+      const tagStr = raw.slice(1, raw.indexOf(' '));
+      return Object.fromEntries(tagStr.split(';').map(t => {
+        const i = t.indexOf('=');
+        return [t.slice(0, i), t.slice(i + 1)];
+      }));
+    }
+
     // Connects to Twitch chat as an anonymous read-only viewer and listens for
     // score messages posted by the StreamElements bot.
     function connect() {
@@ -476,6 +488,17 @@
         const m = raw.match(/:(\w+)!\w+@\w+\.tmi\.twitch\.tv PRIVMSG #\w+ :(.+)/);
         if (!m) return;
 
+        // Check for !mp on / !mp off commands from the broadcaster or mods.
+        // tags.mod === '1' means the sender is a mod; broadcaster is identified by username matching the channel.
+        const tags   = parseTags(raw);
+        const sender = m[1].toLowerCase();
+        const text   = m[2].trim().toLowerCase();
+        const isBroadcasterOrMod = sender === CHANNEL.toLowerCase() || tags.mod === '1';
+        if (isBroadcasterOrMod) {
+          if (text === '!mp on')  { matchPointOn = true;  if (lastData) render(lastData); return; }
+          if (text === '!mp off') { matchPointOn = false; if (lastData) render(lastData); return; }
+        }
+
         // Only process messages from StreamElements — it's the bot that posts the score updates
         if (m[1].toLowerCase() !== 'streamelements') return;
 
@@ -486,7 +509,8 @@
         if (m[2] === lastMessage) return;
 
         lastMessage = m[2];
-        render(parse(m[2]));
+        lastData    = parse(m[2]);
+        render(lastData);
       };
 
       // If the connection drops, wait 3 seconds then reconnect automatically
